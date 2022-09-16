@@ -1,0 +1,7 @@
+---
+- name: OSPF | Install and Configure
+  hosts: all
+  become: true
+
+  roles:
+    - { role: ospf, when: ansible_system == 'Linux' }
