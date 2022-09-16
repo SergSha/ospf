@@ -94,7 +94,7 @@ end</pre>
 <p>Для настроки хостов с помощью Ansible создадим структуру каталогов файлов. <br />
 создаём каталог ansible, затем переходим в этот каталог:</p>
 
-<pre><pre>[user@localhost ospf]$ mkdir ./ansible && cd ./ansible/
+<pre>[user@localhost ospf]$ mkdir ./ansible && cd ./ansible/
 [user@localhost ansible]$</pre>
 
 <p>В этом каталоге создадим необходимые конфиг файлы:<br />
