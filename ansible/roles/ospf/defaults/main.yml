@@ -1,2 +1,5 @@
 ---
 # defaults file for ospf
+
+router_id_enable: false
+symmetric_routing: false

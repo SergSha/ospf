@@ -716,20 +716,7 @@ root@router3:~#</pre>
 
 <p>Теперь мы наблюдаем, что трафик между роутерами router1 и router3 ходит симметрично через router2.</p>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-<h4>Первоначальная настройка Ansible</h4>
+<h4>3.1. Первоначальная настройка Ansible</h4>
 
 <p>Для настроки хостов с помощью Ansible создадим структуру каталогов файлов. <br />
 создаём каталог ansible, затем переходим в этот каталог:</p>
@@ -738,7 +725,7 @@ root@router3:~#</pre>
 [user@localhost ansible]$</pre>
 
 <p>В этом каталоге создадим необходимые конфиг файлы:<br />
-● Конфигурационный файл ansible.cfg, который описывает базовые настройки для работы Ansible:
+● Конфигурационный файл <b>ansible.cfg</b>, который описывает базовые настройки для работы Ansible:
 
 <pre>[defaults]
 #Отключение проверки ключа хоста
@@ -748,7 +735,7 @@ inventory = hosts
 #Отключаем игнорирование предупреждений
 command_warnings= false</pre>
 
-<p>● Файл инвентаризации hosts, который хранит информацию о том, как подключиться к хосту:</p>
+<p>● Файл инвентаризации <b>hosts</b>, который хранит информацию о том, как подключиться к хосту:</p>
 
 <pre>[routers]
 router1 ansible_host=192.168.50.10 ansible_user=vagrant ansible_ssh_private_key_file=.vagrant/machines/router1/virtualbox/private_key
@@ -763,7 +750,7 @@ router3 ansible_host=192.168.50.12 ansible_user=vagrant ansible_ssh_private_key_
 - ansible_ssh_private_key — адрес расположения ssh-ключа<br />
 В файл инвентаризации также можно добавлять переменные, которые могут автоматически добавляться в jinja template. Добавление переменных будет рассмотрено далее.</p>
 
-<p>● Ansible-playbook playbook.yml — основной файл, в котором содержатся инструкции (модули) по настройке для Ansible или включает другие playbook файлы или роли, как в нашем случае:</p>
+<p>● Ansible-playbook <b>playbook.yml</b> — основной файл, в котором содержатся инструкции (модули) по настройке для Ansible или включает другие playbook файлы или роли, как в нашем случае:</p>
 
 <pre>---
 - name: OSPF | Install and Configure
@@ -785,14 +772,7 @@ router3 ansible_host=192.168.50.12 ansible_user=vagrant ansible_ssh_private_key_
 - Role ospf was created successfully
 [user@localhost roles]$</pre>
 
-<h4>Установка пакетов для тестирования и настройки OSPF</h4>
-
-<p>Перед настройкой FRR рекомендуется поставить базовые программы для изменения конфигурационных файлов (vim) и изучения сети (traceroute, tcpdump, net-tools):</p>
-
-<pre>apt -y update
-apt -y install vim traceroute tcpdump net-tools</pre>
-
-<p>Установка пакетов с помощью Ansible</p>
+<p>3.2. Установка пакетов для тестирования и настройки OSPF с помощью Ansible</p>
 
 <pre>#Начало файла provision.yml
 - name: OSPF
@@ -815,290 +795,189 @@ apt -y install vim traceroute tcpdump net-tools</pre>
       state: present
       update_cache: true</pre>
 
+<h4>3.3. Настройка OSPF между машинами на базе Quagga c помощью Ansible</h4>
 
+<pre>#Отключаем UFW и удаляем его из автозагрузки
+- name: disable ufw service
+  service:
+    name: ufw
+    state: stopped
+    enabled: false
 
+# Добавляем gpg-key репозитория
+- name: add gpg frrouting.org
+  apt_key:
+    url: "https://deb.frrouting.org/frr/keys.asc"
+    state: present
 
+# Добавляем репозиторий https://deb.frrouting.org/frr
+- name: add frr repo
+  apt_repository:
+    repo: 'deb https://deb.frrouting.org/frr {{ ansible_distribution_release }} frr-stable'
+    state: present
 
+# Обновляем пакеты и устанавливаем FRR
+- name: install FRR packages
+  apt:
+    name:
+    - frr
+    - frr-pythontools
+    state: present
+    update_cache: true
 
-<h4>2.1 Настройка OSPF между машинами на базе Quagga</h4>
+# Включаем маршрутизацию транзитных пакетов
+- name: set up forward packages across routers
+  sysctl:
+    name: net.ipv4.conf.all.forwarding
+    value: '1'
+    state: present
 
-<p>Пакет Quagga перестал развиваться в 2018 году. Ему на смену пришёл пакет FRR, он построен на базе Quagga и продолжает своё развитие. В данном руководстве настойка OSPF будет осуществляться в FRR.<p>
+# Копируем файл daemons на хосты, указываем владельца и права
+- name: base set up OSPF
+  template:
+    src: daemons
+    dest: /etc/frr/daemons
+    owner: frr
+    group: frr
+    mode: 0640
 
-<p>Процесс установки FRR и настройки OSPF вручную:<br />
-1) Отключаем файерволл ufw и удаляем его из автозагрузки:</p>
+# Копируем файл frr.conf на хосты, указываем владельца и права
+- name: set up OSPF
+  template:
+    src: frr.conf.j2
+    dest: /etc/frr/frr.conf
+    owner: frr
+    group: frr
+    mode: 0640
 
-<pre>systemctl stop ufw
-systemctl disable ufw</pre>
+# Перезапускам FRR и добавляем в автозагрузку
+- name: restart FRR
+  service:
+    name: frr
+    state: restarted
+    enabled: true</pre>
 
-<p>2) Добавляем gpg ключ:</p>
+<p>Файлы daemons и frr.conf должны лежать в каталоге ansible/template.
+Давайте подробнее рассмотрим эти файлы. Содержимое файла daemons одинаково на всех хостах, а вот содержание файла frr.conf на всех хостах будет разное.</p>
 
-<pre>curl -s https://deb.frrouting.org/frr/keys.asc | sudo apt-key add -</pre>
+<p>Для того, чтобы не создавать 3 похожих файла, можно воспользоваться jinja2 template. Jinja2 позволит добавлять в файл уникальные значения для разных серверов.</p>
 
-<p>3) Добавляем репозиторий c пакетом FRR:</p>
+<p>Перед тем, как начать настройку хостов Ansible забирает информацию о каждом хосте. Эту информацию можно использовать в jinja2 темплейтах. Посмотреть, какую информацию о сервере собрал Ansible можно с помощью команды:</p>
 
-<pre>echo deb https://deb.frrouting.org/frr $(lsb_release -s -c) frr-stable > /etc/apt/sources.list.d/frr.list</pre>
+<pre>ansible router1 -i ansible/hosts -m setup -e "host_key_checking = false"</pre>
 
-<p>4) Обновляем пакеты и устанавливаем FRR:</p>
+<p>Команда выполнятся из каталога проекта (где находится Vagrantfile). Помимо фактов Jinja2 может брать информацию из файлов hosts и defaults/main.yml (так как мы указали его в начале файла provision.yml)</p>
 
-<pre>sudo apt update
-sudo apt install frr frr-pythontools</pre>
+<p>В файле frr.conf у нас есть строка:</p>
 
-<p>5) Разрешаем (включаем) маршрутизацию транзитных пакетов:</p>
+<pre><b>hostname router1</b></pre>
 
-<pre>sysctl net.ipv4.conf.all.forwarding=1</pre>
+<p>Когда мы будем копировать файл на router2 и router3 нам нужно будет поменять имя. Сделать это можно так:</p>
 
-<p>6) Включаем демон ospfd в FRR<br />
-Для этого открываем в редакторе файл /etc/frr/daemons и меняем в нём параметры для пакетов zebra и ospfd на yes:</p>
+<pre><b>hostname {{ ansible_hostname }}</b></pre>
 
-<pre>vim /etc/frr/daemons
-zebra=yes
-ospfd=yes
-bgpd=no
-ospf6d=no
-ripd=no
-ripngd=no
-isisd=no
-pimd=no
-ldpd=no
-nhrpd=no
-eigrpd=no
-babeld=no
-sharpd=no
-pbrd=no
-bfdd=no
-fabricd=no
-vrrpd=no
-pathd=no</pre>
+<p>ansible_hostname - заберет из фактов имя хостов и подставит нужное имя.</p>
 
-<p>В примере показана только часть файла</p>
+<p>2) Допустим мы хотим перед настройкой OSPF выбрать, будем ли мы указывать router-id. Для этого в файле <b>defaults/main.yml</b> создаем переменную <b>router_id_enable: false</b><br />
+По умолчанию назначаем ей значение <b>false</b><br />
+Значение router_id мы можем задать в файле hosts, дописав его в конец строки наших хостов:</p>
 
-<p>7) Настройка OSPF<br />
-Для настройки OSPF нам потребуется создать файл /etc/frr/frr.conf, который будет содержать в себе информацию о требуемых интерфейсах и OSPF. Разберем пример создания файла на хосте router1.</p>
+<pre>[routers]
+router1 ansible_host=192.168.50.10 ansible_user=vagrant ansible_ssh_private_key_file=.vagrant/machines/router1/virtualbox/private_key <b>router_id=1.1.1.1</b>
+router2 ansible_host=192.168.50.11 ansible_user=vagrant ansible_ssh_private_key_file=.vagrant/machines/router2/virtualbox/private_key <b>router_id=2.2.2.2</b>
+router3 ansible_host=192.168.50.12 ansible_user=vagrant ansible_ssh_private_key_file=.vagrant/machines/router3/virtualbox/private_key <b>router_id=3.3.3.3</b></pre>
 
-<p>Для начала нам необходимо узнать имена интерфейсов и их адреса. Сделать это можно с помощью двух способов:<br />
-● Посмотреть в linux: ip a | grep inet</p>
+<p>В темплейте файла frr.conf укажем следующее условие:</p>
 
-<pre>root@router1:~# ip a | grep "inet "
-    inet 127.0.0.1/8 scope host lo
-    inet 10.0.2.15/24 brd 10.0.2.255 scope global dynamic enp0s3
-    inet 10.0.10.1/30 brd 10.0.10.3 scope global enp0s8
-    inet 10.0.12.1/30 brd 10.0.12.3 scope global enp0s9
-    inet 192.168.10.1/24 brd 192.168.10.255 scope global enp0s10
-    inet 192.168.50.10/24 brd 192.168.50.255 scope global enp0s16
-root@router1:~#</pre>
+<pre>{% if router_id_enable == false %}!{% endif %}router-id {{ router_id }}</pre>
 
-<p>● Зайти в интерфейс FRR и посмотреть информацию об интерфейсах</p>
+<p>Данное правило в любом случае будет подставлять значение router-id, но, если параметр router_id_enable будет равен значению false, то в начале строки будет ставиться символ ! (восклицательный знак) и строка не будет учитываться в настройках FRR.</p>
 
-<pre>root@router1:~# vtysh
+<h4>3.4. Настройка ассиметричного роутинга с помощью Ansible</h4>
 
-Hello, this is FRRouting (version 8.1).
-Copyright 1996-2005 Kunihiro Ishiguro, et al.
+<pre>
+# Отключаем запрет ассиметричного роутинга
+- name: set up asynchronous routing
+  sysctl:
+    name: net.ipv4.conf.all.rp_filter
+    value: '0'
+    state: present
 
-router1# show interface brief
-Interface 	Status 	VRF 		Addresses
---------- 	------ 	--- 		---------
-enp0s3 		up 		default 	10.0.2.15/24
-enp0s8 		up 		default 	10.0.10.1/30
-enp0s9 		up 		default 	10.0.12.1/30
-enp0s10 	up 		default 	192.168.10.1/24
-enp0s16 	up 		default 	192.168.50.10/24
-lo 			up 		default
+# Делаем интерфейс enp0s8 в router1 «дорогим»
+- name: set up OSPF
+  template:
+    src: frr.conf.j2
+    dest: /etc/frr/frr.conf
+    owner: frr
+    group: frr
+    mode: 0640
 
-router1# exit
-root@router1:~#</pre>
+# Применяем настройки
+- name: restart FRR
+  service:
+    name: frr
+    state: restarted
+    enabled: true</pre>
 
-<p>В обоих примерах мы увидем имена сетевых интерфейсов, их ip-адреса и маски подсети. Исходя из схемы мы понимаем, что для настройки OSPF нам достаточно описать интерфейсы enp0s8, enp0s9, enp0s10</p>
+<p>Пример добавления «дорогого» интерфейса в template frr.conf:</p>
 
-<p>Создаём файл /etc/frr/frr.conf и вносим в него следующую информацию:</p>
+<pre>{% if ansible_hostname == 'router1' %}
+  ip ospf cost 1000
+{% else %}
+  !ip ospf cost 450
+{% endif %}</pre>
 
-<pre>!Указание версии FRR
-frr version 8.1
-frr defaults traditional
-!Указываем имя машины
-hostname router1
-log syslog informational
-no ipv6 forwarding
-service integrated-vtysh-config
-!
-!Добавляем информацию об интерфейсе enp0s8
-interface enp0s8
-!Указываем имя интерфейса
-description r1-r2
-!Указываем ip-aдрес и маску (эту информацию мы получили в прошлом шаге)
-ip address 10.0.10.1/30
-!Указываем параметр игнорирования MTU
-ip ospf mtu-ignore
-!Если потребуется, можно указать «стоимость» интерфейса
-!ip ospf cost 1000
-!Указываем параметры hello-интервала для OSPF пакетов
-ip ospf hello-interval 10
-!Указываем параметры dead-интервала для OSPF пакетов
-!Должно быть кратно предыдущему значению
-ip ospf dead-interval 30
-!
-interface enp0s9
-description r1-r3
-ip address 10.0.12.1/30
-ip ospf mtu-ignore
-!ip ospf cost 45
-ip ospf hello-interval 10
-ip ospf dead-interval 30
+<p>В данном примере, проверяется имя хоста, и, если имя хоста «router1», то в настройку интерфейса enp0s8 добавляется стоимость 1000, в остальных случаях настройка комментируется...</p>
 
-interface enp0s10
-description net_router1
-ip address 192.168.10.1/24
-ip ospf mtu-ignore
-!ip ospf cost 45
-ip ospf hello-interval 10
-ip ospf dead-interval 30
-!
-!Начало настройки OSPF
-router ospf
-!Указываем router-id
-router-id 1.1.1.1
-!Указываем сети, которые хотим анонсировать соседним роутерам
-network 10.0.10.0/30 area 0
-network 10.0.12.0/30 area 0
-network 192.168.10.0/24 area 0
-!Указываем адреса соседних роутеров
-neighbor 10.0.10.2
-neighbor 10.0.12.2
+<h4>2.3 Настройка симметичного роутинга</h4>
 
-!Указываем адрес log-файла
-log file /var/log/frr/frr.log
-default-information originate always</pre>
+<h4>Настройка симметричного роутинга с помощью Ansible</h4>
 
-<p>Сохраняем изменения и выходим из данного файла.</p>
+<p>Настройка симметричного роутинга заключается в том, чтобы добавить правильную настройку в файл <b>/etc/frr/frr.conf</b></p>
 
-Вместо файла frr.conf мы можем задать данные параметры вручную из vtysh.
-Vtysh использует cisco-like команды.
-На хостах router2 и router3 также потребуется настроить конфигруационные
-файлы, предварительно поменяв ip -адреса интерфейсов.
-В ходе создания файла мы видим несколько OSPF-параметров, которые
-требуются для настройки:
-● hello-interval — интервал который указывает через сколько секунд
-протокол OSPF будет повторно отправлять запросы на другие роутеры.
-Данный интервал должен быть одинаковый на всех портах и роутерах, между
-которыми настроен OSPF.
-● Dead-interval — если в течении заданного времени роутер не отвечает на
-запросы, то он считается вышедшим из строя и пакеты уходят на другой
-роутер (если это возможно). Значение должно быть кратно hello-интервалу.
-Данный интервал должен быть одинаковый на всех портах и роутерах, между
-которыми настроен OSPF.
-● router-id — идентификатор маршрутизатора (необязательный параметр), если
-данный параметр задан, то роутеры определяют свои роли по данному
-параметру. Если данный идентификатор не задан, то роли маршрутизаторов
-13определяются с помощью Loopback-интерфейса или самого большого ip-адреса
-на роутере.
-8) После создания файлов /etc/frr/frr.conf и /etc/frr/daemons нужно
-проверить, что владельцем файла является пользователь frr. Группа файла
-также должна быть frr. Должны быть установленны следующие права:
-● у владельца на чтение и запись
-● у группы только на чтение
-ls -l /etc/frr
-Если права или владелец файла указан неправильно, то нужно поменять
-владельца и назначить правильные права, например:
-chown frr:frr /etc/frr/frr.conf
-chmod 640 /etc/frr/frr.conf
-9) Перезапускаем FRR и добавляем его в автозагрузку
-systemct restart frr
-systemctl enable frr
-10) Проверям, что OSPF перезапустился без ошибок
-root@router1:~# systemctl status frr
-● frr.service - FRRouting
-Loaded: loaded (/lib/systemd/system/frr.service; enabled; vendor preset:
-enabled)
-Active: active (running) since Wed 2022-02-23 15:24:04 UTC; 2h 1min ago
-Docs: https://frrouting.readthedocs.io/en/latest/setup.html
-Process: 31988 ExecStart=/usr/lib/frr/frrinit.sh start (code=exited,
-status=0/SUCCESS)
-Main PID: 32000 (watchfrr)
-Status: "FRR Operational"
-Tasks: 9 (limit: 1136)
-Memory: 13.2M
-CGroup: /system.slice/frr.service
-├─32000 /usr/lib/frr/watchfrr -d -F traditional zebra ospfd
-staticd
-├─32016 /usr/lib/frr/zebra -d -F traditional -A 127.0.0.1 -s
-90000000
-├─32021 /usr/lib/frr/ospfd -d -F traditional -A 127.0.0.1
-└─32024 /usr/lib/frr/staticd -d -F traditional -A 127.0.0.1
-Feb 23 15:23:59 router1 zebra[32016]: [VTVCM-Y2NW3] Configuration Read in
-Took: 00:00:00
-Feb 23 15:23:59 router1 ospfd[32021]: [VTVCM-Y2NW3] Configuration Read in
-Took: 00:00:00
-Feb 23 15:23:59 router1 staticd[32024]: [VTVCM-Y2NW3] Configuration Read in
-Took: 00:00:00
-Feb 23 15:24:04 router1 watchfrr[32000]: [QDG3Y-BY5TN] staticd state -> up :
-connect succeeded
-Feb 23 15:24:04 router1 watchfrr[32000]: [QDG3Y-BY5TN] zebra state -> up :
-connect succeeded
-Feb 23 15:24:04 router1 watchfrr[32000]: [QDG3Y-BY5TN] ospfd state -> up :
-connect succeeded
-Feb 23 15:24:04 router1 watchfrr[32000]: [KWE5Q-QNGFC] all daemons up, doing
-startup-complete notify
-Feb 23 15:24:04 router1 frrinit.sh[31988]: * Started watchfrr
-14Feb 23 15:24:04 router1 systemd[1]: Started FRRouting.
-root@router1:~#
-Если мы правильно настроили OSPF, то с любого хоста нам должны быть
-доступны сети:
-● 192.168.10.0/24
-● 192.168.20.0/24
-● 192.168.30.0/24
-● 10.0.10.0/30
-● 10.0.11.0/30
-● 10.0.13.0/30
-Проверим доступность сетей с хоста router1:
-● попробуем сделать ping до ip-адреса 192.168.30.1
-root@router1:~# ping 192.168.30.1
-PING 192.168.30.1 (192.168.30.1) 56(84) bytes of data.
-64 bytes from 192.168.30.1: icmp_seq=1 ttl=64 time=1.32 ms
-64 bytes from 192.168.30.1: icmp_seq=2 ttl=64 time=1.15 ms
-^C
---- 192.168.30.1 ping statistics ---
-2 packets transmitted, 2 received, 0% packet loss, time 1005ms
-rtt min/avg/max/mdev = 1.146/1.234/1.322/0.088 ms
-root@router1:~#
-● Запустим трассировку до адреса 192.168.30.1
-root@router1:~# traceroute 192.168.30.1
-traceroute to 192.168.30.1 (192.168.30.1), 30 hops max, 60 byte packets
-1 192.168.30.1 (192.168.30.1) 0.997 ms 0.868 ms 0.813 ms
-root@router1:~#
-Попробуем отключить интерфейс enp0s9 и немного подождем и снова запустим
-трассировку до ip-адреса 192.168.30.1
-root@router1:~# ifconfig enp0s9 down
-root@router1:~# ip a | grep enp0s9
-4: enp0s9: <BROADCAST,MULTICAST> mtu 1500 qdisc fq_codel state DOWN group
-default qlen 1000
-root@router1:~# traceroute 192.168.30.1
-traceroute to 192.168.30.1 (192.168.30.1), 30 hops max, 60 byte packets
-1 10.0.10.2 (10.0.10.2) 0.522 ms 0.479 ms 0.460 ms
-2 192.168.30.1 (192.168.30.1) 0.796 ms 0.777 ms 0.644 ms
-root@router1:~#
-Как мы видим, после отключения интерфейса сеть 192.168.30.0/24 нам
-остаётся доступна.
-● Также мы можем проверить из интерфейса vtysh какие маршруты мы видим на
-данный момент:
-root@router1:~#
-root@router1:~# vtysh
-Hello, this is FRRouting (version 8.1).
-Copyright 1996-2005 Kunihiro Ishiguro, et al.
-router1# show ip route ospf
-Codes: K - kernel route, C - connected, S - static, R - RIP,
-15O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
-T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
-f - OpenFabric,
-> - selected route, * - FIB route, q - queued, r - rejected, b -
-backup
-t - trapped, o - offload failure
-O 10.0.10.0/30 [110/1000] is directly connected, enp0s8, weight 1,
-02:50:21
-O>* 10.0.11.0/30 [110/200] via 10.0.12.2, enp0s9, weight 1, 00:01:00
-O 10.0.12.0/30 [110/100] is directly connected, enp0s9, weight 1,
-00:01:00
-O 192.168.10.0/24 [110/100] is directly connected, enp0s10, weight 1,
-02:50:21
-O>* 192.168.20.0/24 [110/300] via 10.0.10.2, enp0s9, weight 1, 00:01:00
-O>* 192.168.30.0/24 [110/200] via 10.0.12.2, enp0s9, weight 1, 00:01:00
-router1
+<p>Далее, файл необходимо также отправить на хосты и перезапустить FRR.</p>
+
+<p>Чтобы было легко переключаться между ассиметричным и симметричным роутингом, мы добавим переменную symmetric_routing со значением по умолчанию false в файл defaults/main.yml:</p>
+
+<pre>symmetric_routing: false</pre>
+
+<p>Далее в template frr.conf добавим условие:</p>
+
+<pre>{% if ansible_hostname == 'router1' %}
+  ip ospf cost 1000
+{% elif ansible_hostname == 'router2' and symmetric_routing == true %}
+  ip ospf cost 1000
+{% else %}
+  !ip ospf cost 450
+{% endif %}</pre>
+
+<p>Данное условие проверят имя хоста и переменную symmetric_routing и добавляет в темплейт следующие параметры:<br />
+● Если имя хоста router1 — то добавляется стоимость интерфейса 1000<br />
+● Если имя хоста router2 И значение параметра symmetric_routing true — то
+добавляется стоимость интерфейса 1000<br />
+● В остальных случаях добавляется закомментированный параметр</p>
+
+<p>Для удобного переключения параметров нам потребуется запускать из ansible-playbook только 2 последних модуля. Чтобы не ждать выполнения всего плейбука, можно добавить тег к модулям:</p>
+
+<pre>- name: set up OSPF
+  template:
+    src: frr.conf.j2
+    dest: /etc/frr/frr.conf
+    owner: frr
+    group: frr
+    mode: 0640
+  tags:
+  - setup_ospf
+
+- name: restart FRR
+  service:
+    name: frr
+    state: restarted
+    enabled: true
+  tags:
+  - setup_ospf</pre>
+
+<p>Тогда можно будет запускать playbook не полностью. Пример запуска модулей из ansible-playbook, которые помечены тегами:</p>
+
+<pre>ansible-playbook -i ansible/hosts -l all ansible/playbook.yml <b>-t setup_ospf</b> -e "host_key_checking=false"</pre>
 
