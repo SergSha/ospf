@@ -24,7 +24,7 @@
 
 <p>Создаём каталог, в котором будут храниться настройки виртуальной машины:</p>
 
-<pre>[user@localhost otus]$ mkdir ./ospf
+<pre>[user@localhost otus]$ mkdir <b>./ospf</b>
 [user@localhost otus]$</pre>
 
 <p>Перейдём в каталог ospf:</p>
