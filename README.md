@@ -464,7 +464,7 @@ root@router1:~#</pre>
 Hello, this is FRRouting (version 8.3.1).
 Copyright 1996-2005 Kunihiro Ishiguro, et al.
 
-router1# show ip route ospf
+router1# <b>show ip route ospf</b>
 Codes: K - kernel route, C - connected, S - static, R - RIP,
        O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
        T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
@@ -491,12 +491,12 @@ root@router1:~#</pre>
 
 <p>Снова проверим из интерфейса vtysh:</p>
 
-<pre>root@router1:~# vtysh
+<pre>root@router1:~# <b>vtysh</b>
 
 Hello, this is FRRouting (version 8.3.1).
 Copyright 1996-2005 Kunihiro Ishiguro, et al.
 
-router1# show ip route ospf
+router1# <b>show ip route ospf</b>
 Codes: K - kernel route, C - connected, S - static, R - RIP,
        O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
        T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
@@ -597,7 +597,7 @@ listening on enp0s8, link-type EN10MB (Ethernet), capture size 262144 bytes
 08:21:16.737300 IP <b>192.168.10.1 > router3</b>: ICMP echo request, id 7, seq 27, length 64
 08:21:17.739210 IP <b>192.168.10.1 > router3</b>: ICMP echo request, id 7, seq 28, length 64
 08:21:18.741044 IP <b>192.168.10.1 > router3</b>: ICMP echo request, id 7, seq 29, length 64
-08:21:18.855208 IP <b>router3 > ospf-all.mcast.net: OSPFv2, Hello, length 48
+08:21:18.855208 IP router3 > ospf-all.mcast.net: OSPFv2, Hello, length 48
 08:21:19.742838 IP <b>192.168.10.1 > router3</b>: ICMP echo request, id 7, seq 30, length 64
 08:21:20.744596 IP <b>192.168.10.1 > router3</b>: ICMP echo request, id 7, seq 31, length 64
 08:21:21.745871 IP <b>192.168.10.1 > router3</b>: ICMP echo request, id 7, seq 32, length 64
