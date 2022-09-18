@@ -1253,7 +1253,6 @@ PING 192.168.20.1 (192.168.20.1) from 192.168.10.1 : 56(84) bytes of data.
 ...</pre>
 
 <p>2) На <b>router2</b> запускаем tcpdump, который будет смотреть трафик только на порту enp0s9:</p>
-root@router2:~# tcpdump -i enp0s9
 
 <pre>root@<b>router2</b>:~# tcpdump -i enp0s9
 tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
