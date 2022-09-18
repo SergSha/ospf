@@ -1091,8 +1091,192 @@ root@router1:~#</pre>
 
 <p>Как мы видим, после отключения интерфейса сеть 192.168.30.0/24 нам остаётся доступна, но через интерфейс enp0s8.</p>
 
+<h4>Ассиметричный роутинг</h4>
 
+<p>Теперь попробуем выключить асинхронную блокировку.<br />
+Для этого в директории ansible запустим следующую команду:</p>
 
+<pre>[user@localhost ansible]$ ansible-playbook ./playbook.yml -t setup_ospf -e "<b>symmetric_routing=false</b>"</pre>
 
+<pre>root@router1:~# <b>vtysh</b>
 
+Hello, this is FRRouting (version 8.3.1).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+
+router1# <b>show ip route ospf</b>
+Codes: K - kernel route, C - connected, S - static, R - RIP,
+       O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+O   10.0.10.0/30 [110/300] via 10.0.12.2, enp0s9, weight 1, 00:03:31
+O>* 10.0.11.0/30 [110/200] via 10.0.12.2, enp0s9, weight 1, 00:03:31
+O   10.0.12.0/30 [110/100] is directly connected, enp0s9, weight 1, 00:03:31
+O   192.168.10.0/24 [110/100] is directly connected, enp0s10, weight 1, 00:04:11
+O>* 192.168.20.0/24 [110/300] via <b>10.0.12.2</b>, enp0s9, weight 1, 00:03:31
+O>* 192.168.30.0/24 [110/200] via <b>10.0.12.2</b>, enp0s9, weight 1, 00:03:31
+router1# exit
+root@router1:~#</pre>
+
+<pre>root@router2:~# <b>vtysh</b> 
+
+Hello, this is FRRouting (version 8.3.1).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+
+<b>router2</b># <b>show ip route ospf</b>
+Codes: K - kernel route, C - connected, S - static, R - RIP,
+       O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+O   10.0.10.0/30 [110/100] is directly connected, enp0s8, weight 1, 01:52:40
+O   10.0.11.0/30 [110/100] is directly connected, enp0s9, weight 1, 01:52:05
+O>* 10.0.12.0/30 [110/200] via 10.0.10.1, enp0s8, weight 1, 01:52:00
+  *                        via 10.0.11.1, enp0s9, weight 1, 01:52:00
+O>* 192.168.10.0/24 [110/200] via <b>10.0.10.1</b>, enp0s8, weight 1, 01:52:05
+O   192.168.20.0/24 [110/100] is directly connected, enp0s10, weight 1, 01:52:40
+O>* 192.168.30.0/24 [110/200] via 10.0.11.1, enp0s9, weight 1, 01:52:00
+router2# exit
+root@router2:~# </pre>
+
+<p>После внесения данных настроек, мы видим, что маршрут до сети 192.168.20.0/30 теперь пойдёт через router2, но обратный трафик от router2 пойдёт по другому пути. Давайте это проверим:<br />
+1) На router1 запускаем пинг от 192.168.10.1 до 192.168.20.1:</p>
+
+<pre>PING 192.168.20.1 (192.168.20.1) from 192.168.10.1 : 56(84) bytes of data.
+64 bytes from 192.168.20.1: icmp_seq=1 ttl=64 time=3.14 ms
+64 bytes from 192.168.20.1: icmp_seq=2 ttl=64 time=2.03 ms
+64 bytes from 192.168.20.1: icmp_seq=3 ttl=64 time=0.875 ms
+...</pre>
+
+<p>2) На router2 запускаем tcpdump, который будет смотреть трафик только на порту enp0s9:</p>
+
+<pre>root@router2:~# tcpdump -i enp0s9
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on enp0s9, link-type EN10MB (Ethernet), capture size 262144 bytes
+14:41:22.933822 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 104, length 64
+14:41:23.743999 IP6 fe80::a00:27ff:fe10:ebb1 > ip6-allrouters: ICMP6, router solicitation, length 16
+14:41:23.935892 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 105, length 64
+14:41:24.937015 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 106, length 64
+14:41:25.938767 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 107, length 64
+14:41:26.940169 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 108, length 64
+14:41:27.942013 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 109, length 64
+14:41:28.943998 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 110, length 64
+14:41:29.955527 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 111, length 64
+14:41:30.922692 IP 10.0.11.1 > ospf-all.mcast.net: OSPFv2, Hello, length 48
+14:41:30.923716 IP <b>router2 > ospf-all.mcast.net: OSPFv2, Hello, length 48
+14:41:30.957774 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 112, length 64
+14:41:31.959739 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 113, length 64
+14:41:32.959752 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 114, length 64
+^C
+14 packets captured
+14 packets received by filter
+0 packets dropped by kernel
+root@router2:~#</pre>
+
+<p>Видим что данный порт только получает ICMP-трафик с адреса 192.168.10.1.</p>
+
+<p>3) На router2 запускаем tcpdump, который будет смотреть трафик только на порту enp0s8:</p>
+
+<pre>root@router2:~# tcpdump -i enp0s8
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on enp0s8, link-type EN10MB (Ethernet), capture size 262144 bytes
+14:45:34.474177 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 349, length 64
+14:45:35.259803 IP6 fe80::a00:27ff:fef3:a818 > ip6-allrouters: ICMP6, router solicitation, length 16
+14:45:35.478046 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 350, length 64
+14:45:36.479232 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 351, length 64
+14:45:37.493053 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 352, length 64
+14:45:38.495416 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 353, length 64
+14:45:39.497112 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 354, length 64
+14:45:40.498133 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 355, length 64
+14:45:41.140794 IP <b>router2 > ospf-all.mcast.net: OSPFv2, Hello, length 48
+14:45:41.500420 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 356, length 64
+14:45:42.396436 IP 10.0.10.1 > ospf-all.mcast.net: OSPFv2, Hello, length 48
+14:45:42.502126 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 357, length 64
+14:45:43.504245 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 358, length 64
+^C
+13 packets captured
+13 packets received by filter
+0 packets dropped by kernel
+root@router2:~#</pre>
+
+<p>Видим что данный порт только отправляет ICMP-трафик на адрес 192.168.10.1</p>
+
+<p>Таким образом мы видим ассиметричный роутинг.</p>
+
+<h4>Симметричный роутинг</h4>
+
+<p>Так как у нас уже есть один «дорогой» интерфейс, нам потребуется добавить ещё один дорогой интерфейс, чтобы у нас перестала работать ассиметричная маршрутизация.</p>
+
+<p>Так как в прошлом задании мы заметили что router2 будет отправлять обратно трафик через порт enp0s8, мы также должны сделать его дорогим и далее проверить, что теперь используется симметричная маршрутизация:<br />
+С помощью ansible поменяем стоимость интерфейса enp0s8 на router2:</p>
+
+<pre>[user@localhost ansible]$ ansible-playbook ./playbook.yml -t setup_ospf -e "<b>symmetric_routing=true</b>"</pre>
+
+<p>Зайдем на router2 и проверим настройки из интерфеса vtysh:</p>
+
+<pre>root@router2:~# <b>vtysh</b>
+
+Hello, this is FRRouting (version 8.3.1).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+
+<b>router2</b># <b>show ip route ospf</b>
+Codes: K - kernel route, C - connected, S - static, R - RIP,
+       O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+O   10.0.10.0/30 [110/1000] is directly connected, enp0s8, weight 1, 00:03:42
+O   10.0.11.0/30 [110/100] is directly connected, enp0s9, weight 1, 00:03:42
+O>* 10.0.12.0/30 [110/200] via 10.0.11.1, enp0s9, weight 1, 00:03:02
+O>* 192.168.10.0/24 [110/300] via <b>10.0.11.1</b>, enp0s9, weight 1, 00:02:57
+O   192.168.20.0/24 [110/100] is directly connected, enp0s10, weight 1, 00:03:42
+O>* 192.168.30.0/24 [110/200] via 10.0.11.1, enp0s9, weight 1, 00:03:02
+router2# exit
+root@router2:~# </pre>
+
+<p>После внесения данных настроек, мы видим, что маршрут до сети 192.168.10.0/30 пойдёт через router3.<br />
+Проверим это:</p>
+
+<p>1) На <b>router1</b> запускаем пинг от 192.168.10.1 до 192.168.20.1:</p>
+
+<pre>root@<b>router1</b>:~# ping -I 192.168.10.1 192.168.20.1
+PING 192.168.20.1 (192.168.20.1) from 192.168.10.1 : 56(84) bytes of data.
+64 bytes from 192.168.20.1: icmp_seq=1 ttl=63 time=1.31 ms
+64 bytes from 192.168.20.1: icmp_seq=2 ttl=63 time=2.37 ms
+64 bytes from 192.168.20.1: icmp_seq=3 ttl=63 time=2.63 ms
+...</pre>
+
+<p>2) На <b>router2</b> запускаем tcpdump, который будет смотреть трафик только на порту enp0s9:</p>
+root@router2:~# tcpdump -i enp0s9
+
+<pre>root@<b>router2</b>:~# tcpdump -i enp0s9
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on enp0s9, link-type EN10MB (Ethernet), capture size 262144 bytes
+15:19:02.449017 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 48, length 64
+15:19:02.449132 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 48, length 64
+15:19:03.453823 IP 192.168.10.1 > router2: ICMP echo request, id 1, seq 49, length 64
+15:19:03.453961 IP router2 > 192.168.10.1: ICMP echo reply, id 1, seq 49, length 64
+15:19:04.356620 IP router2 > ospf-all.mcast.net: OSPFv2, Hello, length 48
+15:19:04.359960 IP 10.0.11.1 > ospf-all.mcast.net: OSPFv2, Hello, length 48
+15:19:04.455083 IP 192.168.10.1 > router2: ICMP echo request, id 1, seq 50, length 64
+15:19:04.455149 IP router2 > 192.168.10.1: ICMP echo reply, id 1, seq 50, length 64
+15:19:05.457032 IP 192.168.10.1 > router2: ICMP echo request, id 1, seq 51, length 64
+15:19:05.457129 IP router2 > 192.168.10.1: ICMP echo reply, id 1, seq 51, length 64
+15:19:06.499124 IP 192.168.10.1 > router2: ICMP echo request, id 1, seq 52, length 64
+15:19:06.499199 IP router2 > 192.168.10.1: ICMP echo reply, id 1, seq 52, length 64
+15:19:07.501510 IP 192.168.10.1 > router2: ICMP echo request, id 1, seq 53, length 64
+15:19:07.501608 IP router2 > 192.168.10.1: ICMP echo reply, id 1, seq 53, length 64
+^C
+14 packets captured
+14 packets received by filter
+0 packets dropped by kernel
+root@router2:~#</pre>
+
+<p>Теперь мы видим, что трафик между роутерами ходит симметрично.</p>
 

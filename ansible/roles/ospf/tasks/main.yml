@@ -57,24 +57,7 @@
 
 
 # Копируем файл frr.conf на хосты, указываем владельца и права
-- name: set up OSPF
-  template:
-    src: frr.conf.j2
-    dest: /etc/frr/frr.conf
-    owner: frr
-    group: frr
-    mode: 0640
-  notify:
-  - restart FRR
-
-# Отключаем запрет ассиметричного роутинга
-- name: set up asynchronous routing
-  sysctl:
-    name: net.ipv4.conf.all.rp_filter
-    value: '0'
-    state: present
-
-# Делаем интерфейс enp0s8 в router1 «дорогим»
+# и также делаем интерфейс enp0s8 в router1 «дорогим»
 - name: set up OSPF
   template:
     src: frr.conf.j2
@@ -86,4 +69,11 @@
   - restart FRR
   tags:
   - setup_ospf
+
+# Отключаем запрет ассиметричного роутинга
+- name: set up asynchronous routing
+  sysctl:
+    name: net.ipv4.conf.all.rp_filter
+    value: '0'
+    state: present
 
