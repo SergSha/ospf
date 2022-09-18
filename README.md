@@ -772,30 +772,34 @@ router3 ansible_host=192.168.50.12 ansible_user=vagrant ansible_ssh_private_key_
 - Role ospf was created successfully
 [user@localhost roles]$</pre>
 
-<p>3.2. Установка пакетов для тестирования и настройки OSPF с помощью Ansible</p>
+<h4>3.2. Установка пакетов для тестирования и настройки OSPF с помощью Ansible</h4>
 
-<pre>#Начало файла provision.yml
-- name: OSPF
-  #Указываем имя хоста или группу, которые будем настраивать
-  hosts: all
-  #Параметр выполнения модулей от root-пользователя
-  become: yes
-  #Указание файла с дополнителыми переменными (понадобится при добавлении темплейтов)
-  vars_files:
-  - defaults/main.yml
-  tasks:
-  # Обновление пакетов и установка vim, traceroute, tcpdump, net-tools
-  - name: install base tools
-    apt:
-      name:
-      - vim
-      - traceroute
-      - tcpdump
-      - net-tools
-      state: present
-      update_cache: true</pre>
+<p>Для удобства переходим в каталог ospf:</p>
+
+<pre>[user@localhost roles]$ cd ./ospf/
+[user@localhost ospf]$</pre>
+
+<p>Будем постепенно заполнять файл ./tasks/main.yml:</p>
+
+<pre>[user@localhost ospf]$ vi ./tasks/main.yml</pre>
+
+<pre>---
+# tasks file for ospf
+
+# Обновление пакетов и установка vim, traceroute, tcpdump, net-tools
+- name: install base tools
+  apt:
+    name:
+    - vim
+    - traceroute
+    - tcpdump
+    - net-tools
+    state: present
+    update_cache: true</pre>
 
 <h4>3.3. Настройка OSPF между машинами на базе Quagga c помощью Ansible</h4>
+
+<pre>[user@localhost ospf]$ vi ./tasks/main.yml</pre>
 
 <pre>#Отключаем UFW и удаляем его из автозагрузки
 - name: disable ufw service
@@ -834,12 +838,12 @@ router3 ansible_host=192.168.50.12 ansible_user=vagrant ansible_ssh_private_key_
 
 # Копируем файл daemons на хосты, указываем владельца и права
 - name: base set up OSPF
-  template:
-    src: daemons
-    dest: /etc/frr/daemons
-    owner: frr
-    group: frr
-    mode: 0640
+  lineinfile: 
+    path: /etc/frr/daemons
+    regexp: '^(.*)ospfd=no(.*)$'
+    line: 'ospfd=yes'
+    backrefs: yes
+
 
 # Копируем файл frr.conf на хосты, указываем владельца и права
 - name: set up OSPF
@@ -857,7 +861,7 @@ router3 ansible_host=192.168.50.12 ansible_user=vagrant ansible_ssh_private_key_
     state: restarted
     enabled: true</pre>
 
-<p>Файлы daemons и frr.conf должны лежать в каталоге ansible/template.
+<p>Файлы daemons и frr.conf должны лежать в каталоге ./template/.
 Давайте подробнее рассмотрим эти файлы. Содержимое файла daemons одинаково на всех хостах, а вот содержание файла frr.conf на всех хостах будет разное.</p>
 
 <p>Для того, чтобы не создавать 3 похожих файла, можно воспользоваться jinja2 template. Jinja2 позволит добавлять в файл уникальные значения для разных серверов.</p>
@@ -895,8 +899,9 @@ router3 ansible_host=192.168.50.12 ansible_user=vagrant ansible_ssh_private_key_
 
 <h4>3.4. Настройка ассиметричного роутинга с помощью Ansible</h4>
 
-<pre>
-# Отключаем запрет ассиметричного роутинга
+<pre>[user@localhost ospf]$ vi ./tasks/main.yml</pre>
+
+<pre># Отключаем запрет ассиметричного роутинга
 - name: set up asynchronous routing
   sysctl:
     name: net.ipv4.conf.all.rp_filter
@@ -929,7 +934,7 @@ router3 ansible_host=192.168.50.12 ansible_user=vagrant ansible_ssh_private_key_
 
 <p>В данном примере, проверяется имя хоста, и, если имя хоста «router1», то в настройку интерфейса enp0s8 добавляется стоимость 1000, в остальных случаях настройка комментируется...</p>
 
-<h4>2.3 Настройка симметичного роутинга</h4>
+<h4>3.5 Настройка симметичного роутинга</h4>
 
 <h4>Настройка симметричного роутинга с помощью Ansible</h4>
 
@@ -980,4 +985,114 @@ router3 ansible_host=192.168.50.12 ansible_user=vagrant ansible_ssh_private_key_
 <p>Тогда можно будет запускать playbook не полностью. Пример запуска модулей из ansible-playbook, которые помечены тегами:</p>
 
 <pre>ansible-playbook -i ansible/hosts -l all ansible/playbook.yml <b>-t setup_ospf</b> -e "host_key_checking=false"</pre>
+
+<h4>3.6. Проверка работы тестового стенда OSPF</h4>
+
+<p>Запустим наш стенд с помощью vagrant+ansible:</p>
+
+<pre>[user@localhost ospf]$ vagrant up</pre>
+
+<p>смотрим состояние запущенных машин:</p>
+
+<pre>[user@localhost ospf]$ vagrant status
+Current machine states:
+
+router1                   running (virtualbox)
+router2                   running (virtualbox)
+router3                   running (virtualbox)
+
+This environment represents multiple VMs. The VMs are all listed
+above with their current state. For more information about a specific
+VM, run `vagrant status NAME`.
+[user@localhost ospf]$</pre>
+
+<p>Подключимся по ssh ко всем запущенным машина, зайдем под root пользователем и повторим те же самые ранее проведенные процедуры.</p>
+
+<p>Проверим доступность сетей с хоста router1:<br />
+попробуем сделать ping до ip-адреса 192.168.30.1:</p>
+
+<pre>root@router1:~# <b>ping -c 3 192.168.30.1</b>
+PING 192.168.30.1 (192.168.30.1) 56(84) bytes of data.
+64 bytes from 192.168.30.1: icmp_seq=1 ttl=64 time=1.57 ms
+64 bytes from 192.168.30.1: icmp_seq=2 ttl=64 time=1.49 ms
+64 bytes from 192.168.30.1: icmp_seq=3 ttl=64 time=1.40 ms
+
+--- 192.168.30.1 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2005ms
+rtt min/avg/max/mdev = 1.395/1.483/1.570/0.071 ms
+root@router1:~#</pre>
+
+<p>Запустим трассировку до адреса 192.168.30.1:</p>
+
+<pre>root@router1:~# <b>traceroute 192.168.30.1</b>
+traceroute to 192.168.30.1 (192.168.30.1), 30 hops max, 60 byte packets
+ 1  192.168.30.1 (192.168.30.1)  1.911 ms  2.743 ms  2.053 ms
+root@router1:~#</pre>
+
+<p>Проверим из интерфейса vtysh какие маршруты мы видим на данный момент:</p>
+
+<pre>root@router1:~# <b>vtysh</b>
+
+Hello, this is FRRouting (version 8.3.1).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+
+router1# <b>show ip route ospf</b>
+Codes: K - kernel route, C - connected, S - static, R - RIP,
+       O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+O   10.0.10.0/30 [110/100] is directly connected, enp0s8, weight 1, 00:01:53
+O>* 10.0.11.0/30 [110/200] via 10.0.10.2, enp0s8, weight 1, 00:01:12
+  *                        via 10.0.12.2, enp0s9, weight 1, 00:01:12
+O   10.0.12.0/30 [110/100] is directly connected, enp0s9, weight 1, 00:01:53
+O   192.168.10.0/24 [110/100] is directly connected, enp0s10, weight 1, 00:01:53
+O>* 192.168.20.0/24 [110/200] via 10.0.10.2, enp0s8, weight 1, 00:01:18
+O>* 192.168.30.0/24 [110/200] via 10.0.12.2, enp0s9, weight 1, 00:01:18
+router1# exit
+root@router1:~#</pre>
+
+<p>Попробуем отключить интерфейс enp0s9 и немного подождем и снова запустим трассировку до ip-адреса 192.168.30.1:</p>
+
+<pre>root@router1:~# <b>ifconfig enp0s9 down</b>
+root@router1:~# <b>ip a | grep enp0s9</b>
+4: <b>enp0s9</b>: <BROADCAST,MULTICAST> mtu 1500 qdisc fq_codel state <b>DOWN</b> group default qlen 1000
+root@router1:~# <b>traceroute 192.168.30.1</b>
+traceroute to 192.168.30.1 (192.168.30.1), 30 hops max, 60 byte packets
+ 1  10.0.10.2 (10.0.10.2)  2.136 ms  1.894 ms  1.164 ms
+ 2  192.168.30.1 (192.168.30.1)  4.629 ms  5.655 ms  5.578 ms
+root@router1:~#</pre>
+
+<p>Также мы можем проверить из интерфейса vtysh какие маршруты мы видим на данный момент:</p>
+
+<pre>root@router1:~# vtysh
+
+Hello, this is FRRouting (version 8.3.1).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+
+router1# show ip route ospf
+Codes: K - kernel route, C - connected, S - static, R - RIP,
+       O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+O   10.0.10.0/30 [110/100] is directly connected, enp0s8, weight 1, 00:13:51
+O>* 10.0.11.0/30 [110/200] via 10.0.10.2, enp0s8, weight 1, 00:02:43
+O>* 10.0.12.0/30 [110/300] via 10.0.10.2, enp0s8, weight 1, 00:02:43
+O   192.168.10.0/24 [110/100] is directly connected, enp0s10, weight 1, 00:13:51
+O>* 192.168.20.0/24 [110/200] via 10.0.10.2, enp0s8, weight 1, 00:13:16
+O>* 192.168.30.0/24 [110/300] via 10.0.10.2, enp0s8, weight 1, 00:02:43
+router1# exit
+root@router1:~#</pre>
+
+<p>Как мы видим, после отключения интерфейса сеть 192.168.30.0/24 нам остаётся доступна, но через интерфейс enp0s8.</p>
+
+
+
+
+
 

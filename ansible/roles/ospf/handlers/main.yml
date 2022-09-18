@@ -1,2 +1,10 @@
 ---
 # handlers file for ospf
+
+# Перезапускам FRR и добавляем в автозагрузку
+- name: restart FRR
+  service:
+    name: frr
+    state: restarted
+    enabled: true
+
