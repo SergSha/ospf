@@ -1192,7 +1192,7 @@ listening on enp0s8, link-type EN10MB (Ethernet), capture size 262144 bytes
 14:45:38.495416 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 353, length 64
 14:45:39.497112 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 354, length 64
 14:45:40.498133 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 355, length 64
-14:45:41.140794 IP <b>router2 > ospf-all.mcast.net: OSPFv2, Hello, length 48
+14:45:41.140794 IP router2 > ospf-all.mcast.net: OSPFv2, Hello, length 48
 14:45:41.500420 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 356, length 64
 14:45:42.396436 IP 10.0.10.1 > ospf-all.mcast.net: OSPFv2, Hello, length 48
 14:45:42.502126 IP <b>router2 > 192.168.10.1</b>: ICMP echo reply, id 1, seq 357, length 64
