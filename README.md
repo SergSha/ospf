@@ -1167,7 +1167,7 @@ listening on enp0s9, link-type EN10MB (Ethernet), capture size 262144 bytes
 14:41:28.943998 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 110, length 64
 14:41:29.955527 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 111, length 64
 14:41:30.922692 IP 10.0.11.1 > ospf-all.mcast.net: OSPFv2, Hello, length 48
-14:41:30.923716 IP <b>router2 > ospf-all.mcast.net: OSPFv2, Hello, length 48
+14:41:30.923716 IP router2 > ospf-all.mcast.net: OSPFv2, Hello, length 48
 14:41:30.957774 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 112, length 64
 14:41:31.959739 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 113, length 64
 14:41:32.959752 IP <b>192.168.10.1 > router2</b>: ICMP echo request, id 1, seq 114, length 64
